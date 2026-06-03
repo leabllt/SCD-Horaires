@@ -45,7 +45,9 @@
       white-space: nowrap;
     }
 
-    .week-nav button:hover { background: #f0f0f0; }
+    .week-nav button:hover {
+      background: #f0f0f0;
+    }
 
     .week-label {
       font-size: 14px;
@@ -60,10 +62,15 @@
     }
 
     @media (max-width: 560px) {
-      .day-grid { grid-template-columns: repeat(4, 1fr); }
+      .day-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
     }
+
     @media (max-width: 360px) {
-      .day-grid { grid-template-columns: repeat(2, 1fr); }
+      .day-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
     }
 
     .day-card {
@@ -141,7 +148,11 @@
       flex-wrap: wrap;
     }
 
-    .legend span { display: flex; align-items: center; gap: 5px; }
+    .legend span {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
 
     .legend-dot {
       width: 10px;
@@ -170,33 +181,53 @@
   </div>
 
   <script>
+
     const WORKER_URL = "https://bitter-tooth-6a80.lea-bouillet.workers.dev";
     const NOMS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
     let offsetWeek = 0;
-    let horairesData = {};
+
+    let horairesNormaux = {};
+    let horairesExceptionnels = [];
 
     function getMonday(d) {
       const dt = new Date(d);
       const day = dt.getDay();
-      dt.setDate(dt.getDate() + (day === 0 ? -6 : 1 - day));
+
+      dt.setDate(
+        dt.getDate() + (day === 0 ? -6 : 1 - day)
+      );
+
       dt.setHours(0, 0, 0, 0);
+
       return dt;
     }
 
     function fmt(d) {
-      return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      return d.toLocaleDateString(
+        "fr-FR",
+        {
+          day: "numeric",
+          month: "short"
+        }
+      );
     }
 
-    // Convertit "JJ/MM/AAAA" en objet Date
-    function parseDate(str) {
-      if (!str) return null;
-      const [jour, mois, annee] = str.split("/");
-      return new Date(annee, mois - 1, jour);
+    function parseGristDate(value) {
+
+      if (!value) return null;
+
+      const d = new Date(value * 1000);
+
+      d.setHours(0, 0, 0, 0);
+
+      return d;
     }
 
     async function chargerHoraires() {
+
       try {
+
         const resp = await fetch(WORKER_URL);
 
         if (!resp.ok) {
@@ -205,97 +236,241 @@
 
         const data = await resp.json();
 
-        const aujourd = new Date();
-        aujourd.setHours(0, 0, 0, 0);
-
-        const normaux = {};
-        const exceptionnels = {};
+        horairesNormaux = {};
+        horairesExceptionnels = [];
 
         for (const rec of data.records) {
-          const jour  = rec.fields.Jour;
-          const slot  = rec.fields.Horaires;
-          const debut = rec.fields.Date_de_debut;
-          const fin   = rec.fields.Date_de_fin;
 
-          if (jour === undefined) continue;
+          const jour = Number(rec.fields.Jour);
 
-          if (!debut && !fin) {
-            // Horaire normal (sans dates)
-            normaux[jour] = slot || "";
+          if (isNaN(jour)) continue;
+
+          const horaire =
+            rec.fields.Horaires || "";
+
+          const debut =
+            parseGristDate(
+              rec.fields.Date_de_debut
+            );
+
+          const fin =
+            parseGristDate(
+              rec.fields.Date_de_fin
+            );
+
+          const estException =
+            rec.fields.Date_de_debut ||
+            rec.fields.Date_de_fin;
+
+          if (!estException) {
+
+            horairesNormaux[jour] =
+              horaire;
+
           } else {
-            // Horaire exceptionnel (avec dates)
-            const debutDate = parseDate(debut);
-            const finDate   = parseDate(fin);
-            const debutOk = (debutDate === null) || (aujourd >= debutDate);
-            const finOk   = (finDate   === null) || (aujourd <= finDate);
-            if (debutOk && finOk) {
-              exceptionnels[jour] = slot || "";
+
+            if (fin) {
+              fin.setHours(
+                23, 59, 59, 999
+              );
             }
-          }
-        }
 
-        horairesData = {};
-        for (let j = 0; j <= 6; j++) {
-          if (exceptionnels[j] !== undefined) {
-            horairesData[j] = exceptionnels[j] ? [exceptionnels[j]] : [];
-          } else if (normaux[j]) {
-            horairesData[j] = [normaux[j]];
-          } else {
-            horairesData[j] = [];
+            horairesExceptionnels.push({
+              jour,
+              horaire,
+              debut,
+              fin
+            });
           }
         }
 
         afficher();
 
       } catch (err) {
-        document.getElementById("content").innerHTML =
-          `<div class="status error">⚠️ Impossible de charger les horaires.<br><small>${err.message}</small></div>`;
+
+        document.getElementById(
+          "content"
+        ).innerHTML =
+          `<div class="status error">
+            ⚠️ Impossible de charger les horaires.<br>
+            <small>${err.message}</small>
+          </div>`;
       }
+    }
+
+    function getHorairesPourDate(date) {
+
+      const jour = date.getDay();
+
+      const exception =
+        horairesExceptionnels.find(ex => {
+
+          if (ex.jour !== jour) {
+            return false;
+          }
+
+          const debutOk =
+            !ex.debut ||
+            date >= ex.debut;
+
+          const finOk =
+            !ex.fin ||
+            date <= ex.fin;
+
+          return debutOk && finOk;
+        });
+
+      if (exception) {
+
+        if (
+          !exception.horaire ||
+          !exception.horaire.trim()
+        ) {
+          return [];
+        }
+
+        return [exception.horaire];
+      }
+
+      const normal =
+        horairesNormaux[jour];
+
+      if (!normal) {
+        return [];
+      }
+
+      return [normal];
     }
 
     function afficher() {
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const monday = getMonday(today);
-      monday.setDate(monday.getDate() + offsetWeek * 7);
-      const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
 
-      document.getElementById("week-label").textContent =
+      const today =
+        new Date();
+
+      today.setHours(
+        0, 0, 0, 0
+      );
+
+      const monday =
+        getMonday(today);
+
+      monday.setDate(
+        monday.getDate() +
+        offsetWeek * 7
+      );
+
+      const sunday =
+        new Date(monday);
+
+      sunday.setDate(
+        sunday.getDate() + 6
+      );
+
+      document.getElementById(
+        "week-label"
+      ).textContent =
         `Semaine du ${fmt(monday)} au ${fmt(sunday)}`;
 
-      let html = '<div class="day-grid">';
+      let html =
+        '<div class="day-grid">';
 
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(monday); d.setDate(d.getDate() + i);
-        const dow = d.getDay();
-        const slots = horairesData[dow] || [];
-        const isToday = d.getTime() === today.getTime();
-        const ouvert = slots.length > 0;
+      for (
+        let i = 0;
+        i < 7;
+        i++
+      ) {
 
-        let classes = "day-card";
-        if (isToday) classes += " today";
-        if (!ouvert) classes += " ferme";
+        const d =
+          new Date(monday);
 
-        html += `<div class="${classes}">`;
-        html += `<div class="day-name">${NOMS[dow]}</div>`;
-        html += `<div class="day-num">${d.getDate()}</div>`;
+        d.setDate(
+          d.getDate() + i
+        );
+
+        d.setHours(
+          0, 0, 0, 0
+        );
+
+        const dow =
+          d.getDay();
+
+        const slots =
+          getHorairesPourDate(d);
+
+        const isToday =
+          d.getTime() ===
+          today.getTime();
+
+        const ouvert =
+          slots.length > 0;
+
+        let classes =
+          "day-card";
+
+        if (isToday)
+          classes += " today";
+
+        if (!ouvert)
+          classes += " ferme";
+
+        html +=
+          `<div class="${classes}">`;
+
+        html +=
+          `<div class="day-name">${NOMS[dow]}</div>`;
+
+        html +=
+          `<div class="day-num">${d.getDate()}</div>`;
 
         if (ouvert) {
-          slots.forEach(s => { html += `<div class="slot">${s}</div>`; });
+
+          slots.forEach(s => {
+
+            html +=
+              `<div class="slot">${s}</div>`;
+
+          });
+
         } else {
-          html += `<div class="ferme-label">Fermé</div>`;
+
+          html +=
+            `<div class="ferme-label">Fermé</div>`;
         }
 
-        html += "</div>";
+        html +=
+          "</div>";
       }
 
       html += "</div>";
-      document.getElementById("content").innerHTML = html;
+
+      document.getElementById(
+        "content"
+      ).innerHTML = html;
     }
 
-    document.getElementById("prev").addEventListener("click", () => { offsetWeek--; afficher(); });
-    document.getElementById("next").addEventListener("click", () => { offsetWeek++; afficher(); });
+    document
+      .getElementById("prev")
+      .addEventListener(
+        "click",
+        () => {
+          offsetWeek--;
+          afficher();
+        }
+      );
+
+    document
+      .getElementById("next")
+      .addEventListener(
+        "click",
+        () => {
+          offsetWeek++;
+          afficher();
+        }
+      );
 
     chargerHoraires();
+
   </script>
+
 </body>
 </html>

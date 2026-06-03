@@ -188,6 +188,12 @@
       return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
     }
 
+    function parseDate(str) {
+      if (!str) return null;
+      const [jour, mois, annee] = str.split("/");
+      return new Date(annee, mois - 1, jour);
+    }
+
     async function chargerHoraires() {
       try {
         const resp = await fetch(WORKER_URL);
@@ -200,7 +206,6 @@
 
         const aujourd = new Date();
         aujourd.setHours(0, 0, 0, 0);
-        const ts = aujourd.getTime() / 1000;
 
         const normaux = {};
         const exceptionnels = {};
@@ -213,11 +218,15 @@
 
           if (jour === undefined) continue;
 
-          if (debut === null && fin === null) {
+          if (!debut && !fin) {
+            // Horaire normal (sans dates)
             normaux[jour] = slot || "";
           } else {
-            const debutOk = (debut === null) || (ts >= debut);
-            const finOk   = (fin   === null) || (ts <= fin);
+            // Horaire exceptionnel (avec dates)
+            const debutDate = parseDate(debut);
+            const finDate   = parseDate(fin);
+            const debutOk = (debutDate === null) || (aujourd >= debutDate);
+            const finOk   = (finDate   === null) || (aujourd <= finDate);
             if (debutOk && finOk) {
               exceptionnels[jour] = slot || "";
             }

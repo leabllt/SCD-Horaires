@@ -188,11 +188,11 @@
       return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
     }
 
-    // Convertit un timestamp Grist (secondes) en objet Date minuit UTC
-    function tsToDate(ts) {
-      if (ts === null || ts === undefined) return null;
-      // Grist stocke les dates en secondes depuis epoch
-      return new Date(ts * 1000);
+    // Convertit "JJ/MM/AAAA" en objet Date
+    function parseDate(str) {
+      if (!str) return null;
+      const [jour, mois, annee] = str.split("/");
+      return new Date(annee, mois - 1, jour);
     }
 
     async function chargerHoraires() {
@@ -219,13 +219,13 @@
 
           if (jour === undefined) continue;
 
-          if (debut === null && fin === null) {
+          if (!debut && !fin) {
             // Horaire normal (sans dates)
             normaux[jour] = slot || "";
           } else {
             // Horaire exceptionnel (avec dates)
-            const debutDate = tsToDate(debut);
-            const finDate   = tsToDate(fin);
+            const debutDate = parseDate(debut);
+            const finDate   = parseDate(fin);
             const debutOk = (debutDate === null) || (aujourd >= debutDate);
             const finOk   = (finDate   === null) || (aujourd <= finDate);
             if (debutOk && finOk) {

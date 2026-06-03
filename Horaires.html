@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Horaires d'ouverture</title>
+  <style>
+    /* ── Configuration à personnaliser ── */
+    :root {
+      --couleur-principale: #1D9E75;
+      --couleur-creneau-bg: #E1F5EE;
+      --couleur-creneau-texte: #085041;
+      --couleur-texte: #1a1a1a;
+      --couleur-secondaire: #666;
+      --couleur-bordure: #e0e0e0;
+      --couleur-ferme-bg: #f5f5f5;
+      --font: system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: transparent;
+      color: var(--couleur-texte);
+      padding: 16px;
+    }
+
+    /* Navigation semaine */
+    .week-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 8px;
+    }
+
+    .week-nav button {
+      background: none;
+      border: 1px solid var(--couleur-bordure);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: var(--couleur-texte);
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .week-nav button:hover { background: #f0f0f0; }
+
+    .week-label {
+      font-size: 14px;
+      color: var(--couleur-secondaire);
+      text-align: center;
+    }
+
+    /* Grille des jours */
+    .day-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    @media (max-width: 560px) {
+      .day-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 360px) {
+      .day-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .day-card {
+      border: 1px solid var(--couleur-bordure);
+      border-radius: 10px;
+      padding: 8px 6px;
+      text-align: center;
+      background: #fff;
+      min-height: 80px;
+    }
+
+    .day-card.today {
+      border: 2px solid var(--couleur-principale);
+    }
+
+    .day-card.ferme {
+      background: var(--couleur-ferme-bg);
+    }
+
+    .day-name {
+      font-size: 10px;
+      color: var(--couleur-secondaire);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 3px;
+    }
+
+    .day-num {
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: var(--couleur-texte);
+    }
+
+    .day-card.today .day-num {
+      color: var(--couleur-principale);
+    }
+
+    .slot {
+      font-size: 10px;
+      background: var(--couleur-creneau-bg);
+      color: var(--couleur-creneau-texte);
+      border-radius: 4px;
+      padding: 3px 4px;
+      margin: 2px 0;
+      line-height: 1.3;
+    }
+
+    .ferme-label {
+      font-size: 11px;
+      color: #aaa;
+      font-style: italic;
+      margin-top: 4px;
+    }
+
+    /* État de chargement et erreur */
+    .status {
+      text-align: center;
+      padding: 24px;
+      font-size: 14px;
+      color: var(--couleur-secondaire);
+    }
+
+    .status.error {
+      color: #c0392b;
+      background: #fdf0ef;
+      border-radius: 8px;
+    }
+
+    /* Légende */
+    .legend {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--couleur-secondaire);
+      flex-wrap: wrap;
+    }
+
+    .legend span { display: flex; align-items: center; gap: 5px; }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ════════════════════════════════════════════════
+       CONFIGURATION — modifiez ces 3 lignes
+  ════════════════════════════════════════════════ -->
+  <script>
+    const GRIST_BASE  = "https://grist.numerique.gouv.fr";   // URL de votre instance Grist
+    const GRIST_DOC   = "mT3nYUZdo8xArqMiqGSvwe";                 // Remplacez par votre DOC_ID
+    const GRIST_TABLE = "Horaires_BUC";                     // Nom exact de votre table
+    const GRIST_KEY   = "5832f89b3f47191926f66c3a476ed257e3020a76";                // Votre clé API Grist
+    //
+    // Structure attendue dans la table Grist :
+    //   Colonne "Jour"  → nombre 0 (dim) à 6 (sam)
+    //   Colonne "Slot"  → texte ex. "09:00–12:30"
+  </script>
+  <!-- ════════════════════════════════════════════════ -->
+
+  <div class="week-nav">
+    <button id="prev">&#8592; Sem. précédente</button>
+    <span class="week-label" id="week-label"></span>
+    <button id="next">Sem. suivante &#8594;</button>
+  </div>
+
+  <div id="content">
+    <div class="status">Chargement des horaires…</div>
+  </div>
+
+  <div class="legend">
+    <span><span class="legend-dot" style="background:#5DCAA5"></span>Ouvert</span>
+    <span><span class="legend-dot" style="background:#e0e0e0"></span>Fermé</span>
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;border:2px solid #1D9E75"></span>Aujourd'hui</span>
+  </div>
+
+  <script>
+    /* ── Noms des jours (index 0 = dimanche, JS natif) ── */
+    const NOMS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+
+    let offsetWeek = 0;
+    let horairesData = {}; // { 0: [], 1: ["09:00–12:30", ...], ... }
+
+    /* ── Utilitaires ── */
+    function getMonday(d) {
+      const dt = new Date(d);
+      const day = dt.getDay();
+      dt.setDate(dt.getDate() + (day === 0 ? -6 : 1 - day));
+      dt.setHours(0, 0, 0, 0);
+      return dt;
+    }
+
+    function fmt(d) {
+      return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+    }
+
+    /* ── Chargement depuis Grist ── */
+    async function chargerHoraires() {
+      const url = `${GRIST_BASE}/api/docs/${GRIST_DOC}/tables/${GRIST_TABLE}/records`;
+      try {
+        const resp = await fetch(url, {
+          headers: { "Authorization": `Bearer ${GRIST_KEY}` }
+        });
+
+        if (!resp.ok) {
+          throw new Error(`Erreur ${resp.status} — vérifiez votre DOC_ID, le nom de table et la clé API`);
+        }
+
+        const data = await resp.json();
+
+        // Construire l'objet { jour: [slots] }
+        horairesData = {};
+        for (let j = 0; j <= 6; j++) horairesData[j] = [];
+
+        for (const rec of data.records) {
+          const jour = rec.fields.Jour;
+          const slot = rec.fields.Slot;
+          if (jour !== undefined && slot) {
+            horairesData[jour].push(slot);
+          }
+        }
+
+        afficher();
+
+      } catch (err) {
+        document.getElementById("content").innerHTML =
+          `<div class="status error">⚠️ Impossible de charger les horaires.<br><small>${err.message}</small></div>`;
+      }
+    }
+
+    /* ── Rendu de la semaine ── */
+    function afficher() {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const monday = getMonday(today);
+      monday.setDate(monday.getDate() + offsetWeek * 7);
+      const sunday = new Date(monday); sunday.setDate(sunday.getDate() + 6);
+
+      document.getElementById("week-label").textContent =
+        `Semaine du ${fmt(monday)} au ${fmt(sunday)}`;
+
+      let html = '<div class="day-grid">';
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday); d.setDate(d.getDate() + i);
+        const dow = d.getDay();
+        const slots = horairesData[dow] || [];
+        const isToday = d.getTime() === today.getTime();
+        const ouvert = slots.length > 0;
+
+        let classes = "day-card";
+        if (isToday) classes += " today";
+        if (!ouvert) classes += " ferme";
+
+        html += `<div class="${classes}">`;
+        html += `<div class="day-name">${NOMS[dow]}</div>`;
+        html += `<div class="day-num">${d.getDate()}</div>`;
+
+        if (ouvert) {
+          slots.forEach(s => { html += `<div class="slot">${s}</div>`; });
+        } else {
+          html += `<div class="ferme-label">Fermé</div>`;
+        }
+
+        html += "</div>";
+      }
+
+      html += "</div>";
+      document.getElementById("content").innerHTML = html;
+    }
+
+    /* ── Navigation ── */
+    document.getElementById("prev").addEventListener("click", () => { offsetWeek--; afficher(); });
+    document.getElementById("next").addEventListener("click", () => { offsetWeek++; afficher(); });
+
+    /* ── Lancement ── */
+    chargerHoraires();
+  </script>
+</body>
+</html>

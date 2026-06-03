@@ -182,7 +182,7 @@
 
   <script>
 
-    const WORKER_URL = "https://bitter-tooth-6a80.lea-bouillet.workers.dev";
+    const WORKER_URL = "https://test-horaires-scd.lea-bouillet.workers.dev/";
     const NOMS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
     let offsetWeek = 0;

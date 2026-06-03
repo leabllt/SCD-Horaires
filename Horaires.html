@@ -162,10 +162,7 @@
        CONFIGURATION — modifiez ces 3 lignes
   ════════════════════════════════════════════════ -->
   <script>
-    const GRIST_BASE  = "https://grist.numerique.gouv.fr";   // URL de votre instance Grist
-    const GRIST_DOC   = "mT3nYUZdo8xArqMiqGSvwe";                 // Remplacez par votre DOC_ID
-    const GRIST_TABLE = "Horaires_BUC";                     // Nom exact de votre table
-    const GRIST_KEY   = "5832f89b3f47191926f66c3a476ed257e3020a76";                // Votre clé API Grist
+    
     //
     // Structure attendue dans la table Grist :
     //   Colonne "Jour"  → nombre 0 (dim) à 6 (sam)
@@ -210,38 +207,36 @@
     }
 
     /* ── Chargement depuis Grist ── */
-    async function chargerHoraires() {
-      const url = `${GRIST_BASE}/api/docs/${GRIST_DOC}/tables/${GRIST_TABLE}/records`;
-      try {
-        const resp = await fetch(url, {
-          headers: { "Authorization": `Bearer ${GRIST_KEY}` }
-        });
+    const WORKER_URL = "https://bitter-tooth-6a80.lea-bouillet.workers.dev";
 
-        if (!resp.ok) {
-          throw new Error(`Erreur ${resp.status} — vérifiez votre DOC_ID, le nom de table et la clé API`);
-        }
+async function chargerHoraires() {
+  try {
+    const resp = await fetch(WORKER_URL);
 
-        const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(`Erreur ${resp.status}`);
+    }
 
-        // Construire l'objet { jour: [slots] }
-        horairesData = {};
-        for (let j = 0; j <= 6; j++) horairesData[j] = [];
+    const data = await resp.json();
 
-        for (const rec of data.records) {
-          const jour = rec.fields.Jour;
-          const slot = rec.fields.Slot;
-          if (jour !== undefined && slot) {
-            horairesData[jour].push(slot);
-          }
-        }
+    horairesData = {};
+    for (let j = 0; j <= 6; j++) horairesData[j] = [];
 
-        afficher();
-
-      } catch (err) {
-        document.getElementById("content").innerHTML =
-          `<div class="status error">⚠️ Impossible de charger les horaires.<br><small>${err.message}</small></div>`;
+    for (const rec of data.records) {
+      const jour = rec.fields.Jour;
+      const slot = rec.fields.Slot;
+      if (jour !== undefined && slot) {
+        horairesData[jour].push(slot);
       }
     }
+
+    afficher();
+
+  } catch (err) {
+    document.getElementById("content").innerHTML =
+      `<div class="status error">⚠️ Impossible de charger les horaires.<br><small>${err.message}</small></div>`;
+  }
+}
 
     /* ── Rendu de la semaine ── */
     function afficher() {

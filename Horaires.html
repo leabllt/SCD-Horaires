@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Horaires d'ouverture</title>
   <style>
-    /* ── Configuration à personnaliser ── */
     :root {
       --couleur-principale: #1D9E75;
       --couleur-creneau-bg: #E1F5EE;
@@ -26,7 +25,6 @@
       padding: 16px;
     }
 
-    /* Navigation semaine */
     .week-nav {
       display: flex;
       align-items: center;
@@ -55,7 +53,6 @@
       text-align: center;
     }
 
-    /* Grille des jours */
     .day-grid {
       display: grid;
       grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -122,7 +119,6 @@
       margin-top: 4px;
     }
 
-    /* État de chargement et erreur */
     .status {
       text-align: center;
       padding: 24px;
@@ -136,7 +132,6 @@
       border-radius: 8px;
     }
 
-    /* Légende */
     .legend {
       display: flex;
       gap: 16px;
@@ -158,18 +153,6 @@
 </head>
 <body>
 
-  <!-- ════════════════════════════════════════════════
-       CONFIGURATION — modifiez ces 3 lignes
-  ════════════════════════════════════════════════ -->
-  <script>
-    
-    //
-    // Structure attendue dans la table Grist :
-    //   Colonne "Jour"  → nombre 0 (dim) à 6 (sam)
-    //   Colonne "Slot"  → texte ex. "09:00–12:30"
-  </script>
-  <!-- ════════════════════════════════════════════════ -->
-
   <div class="week-nav">
     <button id="prev">&#8592; Sem. précédente</button>
     <span class="week-label" id="week-label"></span>
@@ -187,13 +170,12 @@
   </div>
 
   <script>
-    /* ── Noms des jours (index 0 = dimanche, JS natif) ── */
+    const WORKER_URL = "https://bitter-tooth-6a80.lea-bouillet.workers.dev";
     const NOMS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
     let offsetWeek = 0;
-    let horairesData = {}; // { 0: [], 1: ["09:00–12:30", ...], ... }
+    let horairesData = {};
 
-    /* ── Utilitaires ── */
     function getMonday(d) {
       const dt = new Date(d);
       const day = dt.getDay();
@@ -206,39 +188,61 @@
       return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
     }
 
-    /* ── Chargement depuis Grist ── */
-    const WORKER_URL = "https://bitter-tooth-6a80.lea-bouillet.workers.dev";
+    async function chargerHoraires() {
+      try {
+        const resp = await fetch(WORKER_URL);
 
-async function chargerHoraires() {
-  try {
-    const resp = await fetch(WORKER_URL);
+        if (!resp.ok) {
+          throw new Error(`Erreur ${resp.status}`);
+        }
 
-    if (!resp.ok) {
-      throw new Error(`Erreur ${resp.status}`);
-    }
+        const data = await resp.json();
 
-    const data = await resp.json();
+        const aujourd = new Date();
+        aujourd.setHours(0, 0, 0, 0);
+        const ts = aujourd.getTime() / 1000;
 
-    horairesData = {};
-    for (let j = 0; j <= 6; j++) horairesData[j] = [];
+        const normaux = {};
+        const exceptionnels = {};
 
-    for (const rec of data.records) {
-      const jour = rec.fields.Jour;
-      const slot = rec.fields.Slot;
-      if (jour !== undefined && slot) {
-        horairesData[jour].push(slot);
+        for (const rec of data.records) {
+          const jour  = rec.fields.Jour;
+          const slot  = rec.fields.Horaires;
+          const debut = rec.fields.Date_de_debut;
+          const fin   = rec.fields.Date_de_fin;
+
+          if (jour === undefined) continue;
+
+          if (debut === null && fin === null) {
+            normaux[jour] = slot || "";
+          } else {
+            const debutOk = (debut === null) || (ts >= debut);
+            const finOk   = (fin   === null) || (ts <= fin);
+            if (debutOk && finOk) {
+              exceptionnels[jour] = slot || "";
+            }
+          }
+        }
+
+        horairesData = {};
+        for (let j = 0; j <= 6; j++) {
+          if (exceptionnels[j] !== undefined) {
+            horairesData[j] = exceptionnels[j] ? [exceptionnels[j]] : [];
+          } else if (normaux[j]) {
+            horairesData[j] = [normaux[j]];
+          } else {
+            horairesData[j] = [];
+          }
+        }
+
+        afficher();
+
+      } catch (err) {
+        document.getElementById("content").innerHTML =
+          `<div class="status error">⚠️ Impossible de charger les horaires.<br><small>${err.message}</small></div>`;
       }
     }
 
-    afficher();
-
-  } catch (err) {
-    document.getElementById("content").innerHTML =
-      `<div class="status error">⚠️ Impossible de charger les horaires.<br><small>${err.message}</small></div>`;
-  }
-}
-
-    /* ── Rendu de la semaine ── */
     function afficher() {
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const monday = getMonday(today);
@@ -278,11 +282,9 @@ async function chargerHoraires() {
       document.getElementById("content").innerHTML = html;
     }
 
-    /* ── Navigation ── */
     document.getElementById("prev").addEventListener("click", () => { offsetWeek--; afficher(); });
     document.getElementById("next").addEventListener("click", () => { offsetWeek++; afficher(); });
 
-    /* ── Lancement ── */
     chargerHoraires();
   </script>
 </body>
